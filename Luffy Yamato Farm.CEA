@@ -1,0 +1,173 @@
+[ENABLE]
+
+{$lua}
+local al = getAddressList()
+searchValue = inputQuery('Value Prompt', "HP: ",''); -- prompts the user for the initial HP value
+
+scan0 = createMemScan(true)
+scan0.setOnlyOneResult(false)
+if searchValue ~= "stop" then
+	pause()
+	scan0.firstScan(soExactValue, vtDword, rtRounded, searchValue, "" , 0 , 0xffffffffffffffff , "" , fsmLastDigits, "78" ,false  ,false, false, false)
+	scan0.waitTillDone()
+	unpause()
+end
+
+foundList0 = createFoundList(scan0)
+foundList0.initialize()
+
+searchValue = inputQuery('Value Prompt', "CD: ",'12'); -- prompts the user for the initial CD value
+
+scan1 = createMemScan(true)
+scan1.setOnlyOneResult(false)
+
+if searchValue ~= "stop" then
+	pause()
+	scan1.firstScan(soExactValue, vtDword, rtRounded, searchValue, "" , 0 , 0xffffffffffffffff , "" , fsmLastDigits, "6c" ,false  ,false, false, false)
+	scan1.waitTillDone()
+	unpause()
+end
+
+foundList1 = createFoundList(scan1)
+foundList1.initialize()
+
+
+-- prompts the user for the current HP value if there are more than 1 result
+while (foundList0.Count > 1 and searchValue ~= "k" and searchValue ~= "stop") do
+    -- After changing the value in-game
+	foundList0.deinitialize()
+    searchValue = inputQuery('Value Prompt', "Current HP: ",'')
+
+    scan0.nextScan(soExactValue, rtRounded, searchValue, "", false, false, false, false, false)
+    scan0.waitTillDone()
+
+	foundList0.initialize()
+end
+
+
+
+-- Change HP value to 500000 only if the address has been specified
+if (scan0.FoundList.Count == 1 or searchValue == "k") then
+    for i = 0, scan0.FoundList.Count - 1, 1 do
+	  writeInteger(scan0.FoundList.Address[i], 500000)
+	  local mr = al.createMemoryRecord()
+	  mr.setAddress(scan0.FoundList.Address[i])
+      mr.Active = true
+    end
+end
+
+unitsSameCD = inputQuery('Value Prompt', "Number of units with same CD: ",'2')
+
+
+while (foundList1.Count > tonumber(unitsSameCD) and searchValue ~= "l" and searchValue ~= "stop") do
+    -- After changing the value in-game
+	foundList1.deinitialize()
+    searchValue = inputQuery('Value Prompt', "Current CD: ",'')
+
+    scan1.nextScan(soExactValue, rtRounded, searchValue, "", false, false, false, false, false)
+    scan1.waitTillDone()
+
+	foundList1.initialize()
+end
+
+if (scan1.FoundList.Count == tonumber(unitsSameCD) or searchValue == "l") then
+    for i = 0, scan1.FoundList.Count - 1, 1 do
+	  writeInteger(scan1.FoundList.Address[i], 0)
+	  local mr = al.createMemoryRecord()
+	  mr.setAddress(scan1.FoundList.Address[i])
+      mr.Active = true
+    end
+end
+
+
+-- Scan for the dmg multiplier
+
+foundList0.deinitialize()
+
+searchValue = inputQuery('Value Prompt', "DMG Multiplier: ",'1.7500000000');
+scan0.newScan()
+
+if searchValue ~= "stop" then
+	pause()
+	scan0.firstScan(soExactValue, vtDouble, rtRounded, searchValue, "" , 0 , 0xffffffffffffffff , "" , fsmLastDigits, "8" , false ,false, false, false)
+	scan0.waitTillDone()
+	unpause()
+end
+
+foundList0.initialize()
+
+while (foundList0.Count > 1 and searchValue ~= "stop") do
+    -- After changing the value in-game
+	foundList0.deinitialize()
+    searchValue = inputQuery('Value Prompt', "Current DMG Multiplier: ",'')
+
+    scan0.nextScan(soExactValue, rtRounded, searchValue, "", false, false, false, false, false)
+    scan0.waitTillDone()
+
+	foundList0.initialize()
+end
+
+dmgDurationAddr = nil
+if scan0.FoundList.Count == 1 then
+	local mr = al.createMemoryRecord()
+	mr.setAddress(scan0.FoundList.Address[0])
+    mr.Active = true
+    mr.VarType = vtDouble
+    mr.Value = "5000000000"
+	dmgDurationAddr = tonumber(scan0.FoundList.Address[0], 16) + 0x43c
+end
+
+local mr0 = al.createMemoryRecord()
+mr0.setAddress(string.sub(string.format("%#x", dmgDurationAddr), 3))
+mr0.VarType = vtDword
+
+
+foundList0.deinitialize()
+
+searchValue = inputQuery('Value Prompt', "DMG Multiplier Duration: ",'1');
+
+if (searchValue ~= "100" and searchValue ~= "stop") then
+	scan0.newScan()
+
+	pause()
+	scan0.firstScan(soExactValue, vtDword, rtRounded, searchValue, "" , 0 , 0xffffffffffffffff , "" , fsmLastDigits, string.sub(string.format("%#x", dmgDurationAddr), -3), false ,false, false, false)
+	scan0.waitTillDone()
+	unpause()
+
+	foundList0.initialize()
+
+	while (foundList0.Count > 1 and searchValue ~= "100") do
+		-- After changing the value in-game
+		foundList0.deinitialize()
+		searchValue = inputQuery('Value Prompt', "Current DMG Multiplier Duration: ",'')
+
+		scan0.nextScan(soExactValue, rtRounded, searchValue, "", false, false, false, false, false)
+		scan0.waitTillDone()
+
+		foundList0.initialize()
+	end
+
+	if scan0.FoundList.Count == 1 then
+		writeInteger(scan0.FoundList.Address[0], 2)
+		local mr = al.createMemoryRecord()
+		mr.setAddress(scan0.FoundList.Address[0])
+		mr.Active = true
+	end
+elseif (searchValue ~= "stop") then
+    mr0.Active = true
+end
+
+foundList0.deinitialize()
+foundList0.destroy()
+foundList0 = nil
+foundList1.deinitialize()
+foundList1.destroy()
+foundList1 = nil
+scan0.destroy()
+scan0 = nil
+scan1.destroy()
+scan1 = nil
+
+{$asm}
+
+[DISABLE]
